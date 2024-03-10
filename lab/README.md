@@ -26,3 +26,17 @@ Before working on any lab task, please follow the following steps to get up and 
 - Open the repository in VS Code, and [create a new terminal](https://code.visualstudio.com/docs/terminal/basics) (checking that the beginning of the line starts with `(.venv)` to signal the correct Python environment got activated).
 - Uncomment the line starting with `# --extra-index-url` from [requirements.txt](requirements.txt) (by removing `# ` from the start) if using a machine with an Nvidia GPU compatible with the specified CUDA version.
 - Execute `pip install -r lab/requirements.txt` in the terminal.
+
+For activating:
+
+`Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process`
+
+`lab\.venv\Scripts\activate`
+
+`pip install -r lab/requirements.txt`
+
+ctrl+shift+p
+
+Python select interpreter
+
+enter .venv/Script/python
