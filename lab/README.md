@@ -29,11 +29,15 @@ Before working on any lab task, please follow the following steps to get up and 
 
 For activating:
 
+`python -m venv lab/.venv`
+
 `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process`
 
 `lab\.venv\Scripts\activate`
 
 `pip install -r lab/requirements.txt`
+
+`pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121`
 
 ctrl+shift+p
 
