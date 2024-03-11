@@ -414,3 +414,56 @@ class FedAvgServer(DecentralizedServer):
             run_result.test_accuracy.append(self.test())
 
         return run_result
+    
+class FedAvgServer_infBatch(DecentralizedServer):
+    def __init__(
+            self, lr: float, batch_size: int, client_subsets: list[Subset],
+            client_fraction: float, nr_local_epochs: int, seed: int) -> None:
+        super().__init__(lr, batch_size, client_subsets, client_fraction, seed)
+        self.name = "FedAvg"
+        self.nr_local_epochs = nr_local_epochs
+        self.batch_size = -1
+        self.client_subsets = client_subsets
+        self.clients = [
+            WeightClient(subset, lr, len(subset), nr_local_epochs)
+            for subset in client_subsets]
+
+    def run(self, nr_rounds: int) -> RunResult:
+
+        elapsed_time = 0.
+        run_result = RunResult(self.name, self.nr_clients, self.client_fraction, self.batch_size, self.nr_local_epochs, self.lr, self.seed)
+
+        for nr_round in tqdm(range(nr_rounds), desc="Rounds", leave=False):
+            setup_start_time = perf_counter()
+            self.model.train()
+            weights = [x.detach().cpu().clone() for x in self.model.parameters()]
+            indices_chosen_clients = self.rng.choice(self.nr_clients, self.nr_clients_per_round, replace=False)
+            chosen_sum_nr_samples = sum(self.client_sample_counts[i] for i in indices_chosen_clients)
+            chosen_adjusted_weights: list[list[torch.Tensor]] = []
+            elapsed_time += perf_counter() - setup_start_time
+            update_time = 0.
+
+            for c_i in indices_chosen_clients:
+                update_start_time = perf_counter()
+                ind = int(c_i)
+                client_round_seed = self.seed + ind + 1 + nr_round * self.nr_clients_per_round
+                client_weights = self.clients[ind].update(weights, client_round_seed)
+                chosen_adjusted_weights.append([
+                    self.client_sample_counts[ind] / chosen_sum_nr_samples * tens
+                     for tens in client_weights])
+                update_time = max(update_time, perf_counter() - update_start_time)
+
+            elapsed_time += update_time
+            aggregate_start_time = perf_counter()
+            averaged_chosen_weights: list[torch.Tensor] = [sum(x) for x in zip(*chosen_adjusted_weights)]
+
+            with torch.no_grad():
+                for client_weight, server_parameter in zip(averaged_chosen_weights, self.model.parameters()):
+                    server_parameter[:] = client_weight.to(device=device)
+
+            elapsed_time += perf_counter() - aggregate_start_time
+            run_result.wall_time.append(round(elapsed_time, 1))
+            run_result.message_count.append(2 * (nr_round + 1) * self.nr_clients_per_round)
+            run_result.test_accuracy.append(self.test())
+
+        return run_result
