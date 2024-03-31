@@ -25,19 +25,19 @@ class Autoencoder(nn.Module):
         self.linear3 = nn.Linear(H2, H2)
         self.lin_bn3 = nn.BatchNorm1d(num_features=H2)
 
-        #         # Latent vectors mu and sigma
+        # Latent vectors mu and sigma
         self.fc1 = nn.Linear(H2, latent_dim)
         self.bn1 = nn.BatchNorm1d(num_features=latent_dim)
         self.fc21 = nn.Linear(latent_dim, latent_dim)
         self.fc22 = nn.Linear(latent_dim, latent_dim)
 
-        #         # Sampling vector
+        # Sampling vector
         self.fc3 = nn.Linear(latent_dim, latent_dim)
         self.fc_bn3 = nn.BatchNorm1d(latent_dim)
         self.fc4 = nn.Linear(latent_dim, H2)
         self.fc_bn4 = nn.BatchNorm1d(H2)
 
-        #         # Decoder
+        # Decoder
         self.linear4 = nn.Linear(H2, H2)
         self.lin_bn4 = nn.BatchNorm1d(num_features=H2)
         self.linear5 = nn.Linear(H2, H)
@@ -103,14 +103,22 @@ class Autoencoder(nn.Module):
                 f"Epoch: {epoch} Loss: {total_loss.detach().numpy() / num_batches:.3f}")
 
     def sample(self, nr_samples, mu, logvar):
+        #  计算标准差（sigma）
         sigma = torch.exp(logvar / 2)
         no_samples = nr_samples
+        # mu和sigma的原始尺寸是[n_samples, n_features]
+        # mu.mean(axis=0)和sigma.mean(axis=0)的结果将是一维的，尺寸为[n_features]
+        # q代表了一个多元正态分布，其中每个维度的均值和标准差都是基于所有样本的平均值。
         q = torch.distributions.Normal(mu.mean(axis=0), sigma.mean(axis=0))
+        # rsample允许通过随机梯度下降进行优化，因为它在采样过程中保留了梯度信息
+        # z的最终尺寸将是[no_samples, n_features]
         z = q.rsample(sample_shape=torch.Size([no_samples]))
         with torch.no_grad():
             pred = self.decode(z).cpu().numpy()
 
+        # 将预测结果的最后一列的值限制在0和1之间
         pred[:, -1] = np.clip(pred[:, -1], 0, 1)
+        # 将最后一列的值四舍五入到最近的整数
         pred[:, -1] = np.round(pred[:, -1])
         return pred
 
@@ -122,19 +130,25 @@ class customLoss(nn.Module):
 
     def forward(self, x_recon, x, mu, logvar):
         loss_MSE = self.mse_loss(x_recon, x)
+        # Kullback-Leibler (KL) 
         loss_KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
         return loss_MSE + loss_KLD
 
+# KL散度损失的作用：
+# 正则化潜在空间：KL散度损失促使模型学习的潜在表示（由mu和logvar参数化的分布）靠近先验分布（通常是标准正态分布）。这有助于防止过拟合，确保潜在空间的平滑性，从而使模型能够生成新的、有意义的数据点。
+# 平衡重构与正则化：在VAE中，总损失是重构损失（如均方误差损失）和KL散度损失的和。这种设计既想要模型准确重构输入数据，又希望其学习到的潜在表示有好的通用性和解释性。
 
 if __name__ == "__main__":
     np.random.seed(42)
     torch.manual_seed(42)
+
     df = pd.read_csv(Path(__file__).parent / "heart-dataset" / "heart.csv")
     categorical = ['sex', 'cp', 'fbs', 'restecg', 'exang', 'slope', 'ca', 'thal']
     encoded_df = pd.get_dummies(df, columns=categorical)
     X = encoded_df.drop("target", axis=1)
     y = encoded_df['target']
+
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
     sc = StandardScaler()
     X_train = sc.fit_transform(X_train)
@@ -143,6 +157,7 @@ if __name__ == "__main__":
     X_test = torch.tensor(X_test).float()
     y_train = torch.tensor(y_train.values).long()
     y_test = torch.tensor(y_test.values).long()
+
     D_in = X.shape[1] + 1
     H = 48
     H2 = 32
@@ -157,6 +172,7 @@ if __name__ == "__main__":
 
     _, mu, logvar = model.forward(real_data)
 
+    # 连着y一起生成
     synthetic_data = model.sample(len(real_data), mu, logvar)
     synthetic_x = torch.tensor(synthetic_data[:, :-1])
     synthetic_y = torch.tensor(synthetic_data[:, -1]).long()
