@@ -166,6 +166,7 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
     loss_mse = customLoss()
     real_data = torch.concat((X_train, y_train.view(-1, 1)), dim=1)
+    print('real_data: ', real_data.size())
     EPOCHS = 200
     BATCH_SIZE = 64
     model.train_with_settings(EPOCHS, BATCH_SIZE, real_data, optimizer, loss_mse)
