@@ -1,0 +1,39 @@
+Hello Aditya,
+
+Thank you very much for your patient and important reply! I'll answer your question first.
+
+1) What is the exact scenario? That is, are there multiple clients holding features? If so, is the objective to forecast one time series feature or all of them simultaneously? 
+
+Yes, there are multiple clients holding features. And we need to forecast all of them simultaneously.
+
+2) Who is the party that “owns" the feature to be forecasted? This will heavily influence whether the server is the appropriate party to hold the decoder. Data privacy reasons.
+
+This is a really tricky one, and Server shouldn't have the ability to get or restore the raw data. So now I'm thinking it's a bit infeasible to deploy a decoder on Server to try to get an approximation of the raw data. Now I'm trying to figure out how to try to ensure that the latent features after encode retain enough timing information.
+
+3) SiloFuse deals with tabular data, i.e., there is no sequential correlation between samples. With time series data, the auto encoders need to preserve this sequential correlation as well because time is an important factor. What are your ideas regarding this challenge?
+
+This is the most critical part and the most essential difference between what we do with SiloFuse: Unlike common tabular data, the smallest unit of the time series dataset is not a row but a sequence which length is determined by the Window Size. In Diffusion-TS, Window Size equal to 24, this is changeable. About how to preserve this sequential correlation, My current idea is instead of using VAE or simple 3-layer MLP, try other model like RNN and so on that are good at time series(But just a thought, I first need to know if Diffusion-TS performs well on latent features. If it performs as well as using raw data, then it's fine to just use VAE for encode.)
+
+In those days, we implemented the idea of SiloFuse based on Diffusion-TS: first train the Encoder and Decoder, then train Diffusion-TS. the AutoEncoder we used is VAE, and I will also try the 3-layer MLP mentioned in your paper later. we used for Dataset the vertical split, the same method as in your paper. I'm also taking into account that the dataset provided by each client is not aligned on the rows (timeline), which is a bit more complicated than normal tabular data.
+Anyway, for VFL, my main idea is to extend SiloFuse to be able to handle time series dataset.
+It can be divided into three points:
+1. verify that Diffusion-TS can use the latent feature for both synthesis and forecast tasks(we are doing experiments on this now);
+2. if the latent feature used lacks timing linkage which causes Diffusion-TS to be ineffective, how to choose the encode method to preserve the time information as much as possible.
+3. use Decoder on Server to restore the real information (rejected).
+
+Then I realized that time series can also be done by HFL, because we can divide these sequences of the same length in sequential order, or we can randomly intercept sequences of length 24 from the dataset. 
+When we need IID subsets, we can either disrupt the dataset or use randomly intercepted sequences;
+When we need NIID subsets, we can use sequences divided in sequential order and assign them to each client in turn.
+Another idea is to use a pretrained model to give each segmented sequence a label (up, down, maintain). Then use this label for iid and niid segmentation.
+
+To organize, I want to implement "Extend Diffusion-TS to Federated Learning", both HFL and VFL.
+The main goal on HFL is to: 
+1. to see whether we can achieve the same results as IID with the NIID dataset.
+2. deal with each client not being aligned on the row (timeline).
+3. test the maximum number of clients we can support with guaranteed performance. 
+
+The main goal on VFL is to: 
+1. extend SiloFuse to be able to handle time series dataset.
+2. make VFL-based  Diffusion-TS's result as good as only using Diffusion-TS(how to preserve time information)
+
+As this research deepened, I realized that there were so many questions to be answered and so many new ideas were born that I didn't know if they were right, so I documented them all and hope to have your guidance. And thank you so much for introducing me to Lydia!
