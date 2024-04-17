@@ -1,0 +1,38 @@
+我们在project上遇到了一些关于Time series相关的问题，我了解到你是做这个方向的，所以想问一下你。
+我们上周和教授探讨了我们在Diffusion-TS上如何应用FL，教授想让我们专注于一个方向并深入下去，才有发会议论文的可能性.
+我跟Aditya讨论过如何将他的SiloFuse扩展到Time series上，后来发现能改动的地方比较少，主要是关于如何在本地clients 的encoder之后有效保留latent feature的时序信息。讨论之后我们决定专注于HFL。
+关于HFL，我们主要思考两个问题。
+第一个问题是如何让clients得到iid或者non-iid的subset。这也就是说，我们该怎样分割和分组sequence。
+iid需要既满足数据之间相互独立，又要满足它们在同一个分布下。遗憾的是，因为是time series，后面的sequence取决于前面的sequence。
+假设我们有subset_1 = dataset[0:24], subset_2 = dataset[2500:2524]。就算我们在分割完sequence后将其shuffle，subset_1 依然会影响subset_2因为它们是先后发生的。
+我的想法是，我们没办法得到一个完全iid的数据集，但我们可以想办法去得到一个similar-iid的数据集。然后使用一系列评价iid的matrics去评价我们的方法是否有用。
+
+
+第二个问题是关于如何处理数据集。
+首先是align不同clients上的数据集，因为我们是做HFL，只需要使用FedAvg来总和weights，所以不需要考虑这个问题。
+然后是在一个client内部，如果出现缺少了一部分特征的情况，该怎么处理。这种情况是存在的，因为不同clients获得的time series可能不同：有些可以获得所有的feature，有些只能获得一半甚至只有一两个feature。当我们遇到这些数据时，完全弃用它们，只使用拥有所有feature的sequence明显是个不好的选择——这样挑选之后剩下的数据太少了。而且有些数据集的feature不是全部缺失的，而是部分缺失。比如第24行到36行缺失，等等。
+所以我们需要有一种可以有效使用这些缺失某些feature的dataset的手段。
+我目前的想法是：
+1. 如果一个subset完全缺失某些feature（六个feature只记录了三个），那么就将没有的feature置为mask，对应的真值也是mask。这样每个client的输出维度还是feature size=6。然后我们利用FedAvg对每个clients的weights进行整合（这里的加权计算会考虑到feature缺失的情况，我的想法是，除了考虑subset size，feature越完整的client权重越高）。
+2. 如果一个subset部分缺失某些feature（有记录六个feature但是有些feature缺失了一段时间内的记录），这时有两种做法：第一做法是按照第一种情况那样将缺失数据和对应真值置为mask，也就是不利用缺失数据进行训练；第二种做法是我先利用上一个阶段或者是Server提供的weights对缺失数据做生成，然后将其作为真值进行下一步的训练。
+3. 如果一个subset既完全缺失了某些feature（六个feature只记录了三个），又部分缺失了某些feature（剩下的三个feature中的某些时间段也缺失了），那么就需要结合前两种情况来一起探讨了。
+具体的效果得根据实验情况来分析了，我想先听听你的想法。
+
+
+We had some questions about Time series related issues on project, and I understand that you are doing this direction, so I wanted to ask you about it.
+We talked to our professor last week about how we are applying FL on Diffusion-TS, and the professor wants us to focus on one direction and go deeper in order to have the possibility of sending a conference paper.
+I discussed with Aditya about how to extend his SiloFuse to Time series, and then realized that there are fewer changes that can be made, mainly about how to effectively preserve the timing information of the latent feature after the encoder of the localclients. After the discussion we decided to focus on HFL.
+
+Regarding HFL, we mainly think about two issues.
+
+The first one is how to let clients get iid or non-iid subsets, that is, how to split and group sequences. I organized it into a latex last night and you can check out the attachment.
+
+The second problem is about how to handle the dataset.
+The first is to align the dataset on different clients, since we are doing HFL and only need to use FedAvg to sum the weights, we don't need to think about this.
+Then it is about what to do if there is a situation where a part of the features are missing within a client. This situation exists because different clients may get different time series: some can get all the features, some can only get half or even only one or two features, and when we come across these data, it is obviously a bad choice to discard them completely and just use the sequence that has all the features--There is too little data left after this selection. And some datasets have not all missing features, but some. For example, rows 24 through 36 are missing, and so on.
+So we need a means to efficiently use these datasets with some missing features.
+My current idea is:
+1. if a subset is completely missing some features (only three of the six features are recorded), then the features that are not there are set to mask, and the corresponding truth value is also mask. so that the output dimension of each client is still feature size=6. then we use FedAvg to check the output dimension of each client's weights to integrate (the weighting calculation here will take into account the case of missing features, my idea is that, in addition to considering the subset size, the more complete the feature, the higher the weight of the client).
+2. If a subset part of the missing features (there are records of six features but some features are missing for a period of time), there are two approaches: the first approach is in accordance with the first case as the missing data and the corresponding true value is set to mask, that is, do not utilize the missing data for training; the second approach is to utilize the previous stage or the weights provided by the Server to generate the missing data, and then use them as the truth values for the next training step.
+3. If a subset is missing some features (only three of the six features are recorded) and partially missing some features (some time periods in the remaining three features are also missing), then it is necessary to combine the first two cases to explore together.
+We'll have to analyze the results based on the experiments, and I'd like to hear your thoughts first.
